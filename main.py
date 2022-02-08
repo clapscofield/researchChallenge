@@ -19,13 +19,13 @@ import argparse, ast
 
 DICT, TEXT = 0, 1
 
-parser = argparse.ArgumentParser(description='Recommendation Systems 2020.2 PPGCC/UFMG by 2020656790.')
-parser.add_argument('filepaths', nargs=3, help='Filepaths for ratings.csv and targets.csv')
+parser = argparse.ArgumentParser(description='Trabalho SR | Clarisse e Bruna')
+parser.add_argument('filepaths', nargs=3, help='Inserir entradas na ordem: ratings.jsonl content.jsonl targets.csv')
 
 args = parser.parse_args()
 filepaths = args.filepaths
 
-content_filename, train_filename, test_filename = filepaths 
+train_filename, content_filename, test_filename = filepaths 
 
 
 # ### Load train ratings and filter users with few interactions
@@ -33,9 +33,9 @@ content_filename, train_filename, test_filename = filepaths
 # In[2]:
 
 
-def drop( ratings, idx, column, thres):
+def drop(ratings, idx, column, thres):
         
-    values = [ui.split(':')[idx] for ui in train_ratings['UserId:ItemId']]
+    values = train_ratings[0] 
     ratings[column] = values
 
     values, counts = np.unique(values, return_counts=True)
@@ -46,7 +46,7 @@ def drop( ratings, idx, column, thres):
     return ratings.drop(column, axis=1),   {v: k  for k, v in enumerate( sorted(values) ) } 
 
 
-train_ratings = pd.read_csv(train_filename)
+train_ratings = pd.read_json(train_filename) #nao eh csv, tem que trocar o read_csv
 train_ratings, users = drop(train_ratings, 0, 'users',20)
 
 
@@ -64,6 +64,8 @@ content = {}
 vocabulary = []
 vocab_df   = {}
 items = {}
+
+#lendo json
 for k, line in enumerate(lines[1:-1]):
     idx_comma = line.find(',')
 
@@ -121,8 +123,8 @@ m, n = len(users), len(items)
 utility = np.full((m, n), np.nan)
 
 for k, i in enumerate(train_ratings.index):
-    user_item = train_ratings.loc[i, 'UserId:ItemId'].split(':')
-    utility[users.get(user_item[0]), items.get(user_item[1])] = train_ratings.loc[i, 'Prediction'] 
+    user_item = train_ratings.loc[i, 'UserId:ItemId'].split(':') #trocar slip para formato correto
+    utility[users.get(user_item[0]), items.get(user_item[1])] = train_ratings.loc[i, 'Prediction']  #nao eh prediction, eh rating
 
 
 # ## Build user vectors `(Users x Vocabulary)`
@@ -197,9 +199,9 @@ global_mean = np.nanmean(utility)
 # In[10]:
 
 
-test = pd.read_csv(test_filename)
+test = pd.read_csv(test_filename) #tem que mudar, nao eh csv
 
-rated_items = np.unique([ui.split(':')[1] for ui in train_ratings['UserId:ItemId']] )
+rated_items = np.unique([ui.split(':')[1] for ui in train_ratings['UserId:ItemId']] ) #mudar leitura user :
 rated_items = {v: k  for k, v in enumerate( sorted(rated_items) ) } 
 
 
@@ -207,7 +209,7 @@ all_pred = []
 kind = []
 for i in range(len(test)):
     
-    user, item = test.iloc[i]['UserId:ItemId'].split(':')
+    user, item = test.iloc[i]['UserId:ItemId'].split(':') #mudar nao tem separacao
     user = users.get(user)  
     rated_item = rated_items.get(item) 
     item = items.get(item)

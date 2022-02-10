@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
-
 
 import pandas as pd
 import numpy as np
@@ -11,62 +9,58 @@ import argparse, ast
 DICT, TEXT = 0, 1
 
 parser = argparse.ArgumentParser(description='Trabalho SR | Clarisse e Bruna')
-parser.add_argument('filepaths', nargs=3, help='Inserir entradas na ordem: ratings.jsonl content.jsonl targets.csv')
+parser.add_argument('arquivos', nargs=3, help='Inserir entradas na ordem: ratings.jsonl content.jsonl targets.csv')
 
 args = parser.parse_args()
-filepaths = args.filepaths
+arquivos = args.arquivos
 
-train_filename, content_filename, test_filename = filepaths 
-
-
-# ### Load train ratings and filter users with few interactions
-
-# In[2]:
+arquivo_treino, arquivo_conteudo, arquivo_teste = arquivos 
 
 
-def drop(ratings, idx, column, thres):
+# Carrega os ratings de treino e filtra os usuários
+def drop(ratings, idx, coluna, arvores):
         
-    values = train_ratings.iloc[:, idx]
-    ratings[column] = values
+    valores = ratings_treino.iloc[:, idx]
+    ratings[coluna] = valores
 
-    values, counts = np.unique(values, return_counts=True)
-    drop_values    = [v for k, v in enumerate(values) if counts[k] <= thres]
-    ratings        = ratings.drop(ratings[ratings[column].isin(drop_values)].index)
+    valores, counts = np.unique(valores, return_counts=True)
+    drop_values = [v for k, v in enumerate(valores) if counts[k] <= arvores]
+    ratings = ratings.drop(ratings[ratings[coluna].isin(drop_values)].index)
 
-    values = [v for v in values if v not in drop_values] 
-    return ratings.drop(column, axis=1),   {v: k  for k, v in enumerate( sorted(values) ) } 
+    valores = [v for v in valores if v not in drop_values] 
+    return ratings.drop(coluna, axis=1),   {v: k  for k, v in enumerate( sorted(valores) ) } 
 
 
-train_ratings = pd.read_json(train_filename, lines=True) 
-train_ratings, users = drop(train_ratings, 0, 'users',20) 
+ratings_treino = pd.read_json(arquivo_treino, lines=True) 
+ratings_treino, usuarios = drop(ratings_treino, 0, 'users',20) 
 
-conteudo = pd.read_json(content_filename, lines=True) 
+conteudo_arquivo = pd.read_json(arquivo_conteudo, lines=True) 
 
-content = {}
-vocabulary = []
+conteudo = {}
+vocabulario = []
 vocab_df   = {}
-items = {}
+itens = {}
 k = 0
 
-for index, linha in conteudo.iterrows():
+for index, linha in conteudo_arquivo.iterrows():
     item = linha["ItemId"]
-    items[item] = k
+    itens[item] = k
     k = k + 1
 
-    atributos  = linha[conteudo.columns.difference(['ItemId'])]
+    atributos  = linha[conteudo_arquivo.columns.difference(['ItemId'])]
     #dicionario de atributos
-    content[item] = []
-    content[item].append(atributos)
+    conteudo[item] = []
+    conteudo[item].append(atributos)
 
     if 'Genre' not in atributos: 
-        description = ['n/a']
+        descricao = ['n/a']
     else:
-        description = [att.lower().strip() for att in atributos['Genre'].split(',')]
+        descricao = [att.lower().strip() for att in atributos['Genre'].split(',')]
     
-    content[item].append(description)
+    conteudo[item].append(descricao)
     
     #contagem de repeticao de termos
-    for term in description:
+    for term in descricao:
         if term not in vocab_df:
             vocab_df[term] = 1
         else:
@@ -76,122 +70,108 @@ for index, linha in conteudo.iterrows():
 
 # ## Calcutate TF_IDF Matrix `(Items x Vocabulary)`
 
-# In[4]:
 
-
-keys2idx = {v:k for k,v in enumerate(vocab_df)}
+chaves_idx = {v:k for k,v in enumerate(vocab_df)}
 
 TF_IDF = []
-for k, item in enumerate(items.keys()):
+for k, item in enumerate(itens.keys()):
     
-    vector = np.zeros(len(vocab_df)) 
-    for term in content[item][TEXT]:
+    vetor = np.zeros(len(vocab_df)) 
+    for term in conteudo[item][TEXT]:
         
-        tf  = content[item][TEXT].count(term)
-        idf = np.log( len(content)/ vocab_df[term]) 
+        tf  = conteudo[item][TEXT].count(term)
+        idf = np.log( len(conteudo)/ vocab_df[term]) 
 
-        vector[keys2idx[term]] = tf * idf
+        vetor[chaves_idx[term]] = tf * idf
 
-    TF_IDF.append(vector)
+    TF_IDF.append(vetor)
 
 TF_IDF = np.asarray(TF_IDF)
 
 
-# ## Build utility matrix to facilitate further computations
-
-# In[5]:
-
-m, n = len(users), len(items)
-utility = np.full((m, n), np.nan)
+# Constroi matriz para facilitar próximas computações
+m, n = len(usuarios), len(itens)
+matriz = np.full((m, n), np.nan)
 
 #k eh contagem
 #i eh o valor do index
 #user item[0] eh o usuario e user item[1] eh o item
-for index, linha in train_ratings.iterrows():
+for index, linha in ratings_treino.iterrows():
     usuario_id = linha['UserId']
     item_id = linha['ItemId']
-    utility[users.get(usuario_id), items.get(item_id)] = linha['Rating']
-
-# # ## Build user vectors `(Users x Vocabulary)`
-
-# # In[6]:
+    matriz[usuarios.get(usuario_id), itens.get(item_id)] = linha['Rating']
 
 
-user_vectors = []
+# Constroi vetores de usuários (Usuarios x Vocabularios)
+vetores_usuarios = []
 
-for k, user in enumerate(users):
+for k, usuario in enumerate(usuarios):
     
-    indices = np.nonzero( ~np.isnan(utility[users[user]]) )[0]
+    indices = np.nonzero( ~np.isnan(matriz[usuarios[usuario]]) )[0]
     
-    user_vector = np.asarray([utility[users[user], idx] * TF_IDF[idx] for idx in indices]) 
+    user_vector = np.asarray([matriz[usuarios[usuario], idx] * TF_IDF[idx] for idx in indices]) 
     user_vector = (1/len(indices)) * user_vector.sum(axis=0)
     
-    user_vectors.append(user_vector)    
+    vetores_usuarios.append(user_vector)    
+
+media_usuarios = np.nanmean(matriz, axis=1)
+max_usuario  = np.nanmax(matriz, axis=1)
+min_usuario  = np.nanmin(matriz, axis=1)
+
+range_usuario = [min_usuario - media_usuarios, max_usuario - min_usuario]
 
 
+def similaridade(user, item):
+    vetor_usuario = vetores_usuarios[user]
+    vetor_item = TF_IDF[item]
 
-user_mean = np.nanmean(utility, axis=1)
-user_max  = np.nanmax(utility, axis=1)
-user_min  = np.nanmin(utility, axis=1)
+    sim = np.dot(vetor_usuario, vetor_item)/ ( np.linalg.norm(vetor_usuario)*np.linalg.norm(vetor_item) )
 
-user_range = [user_min - user_mean, user_max - user_min]
-
-
-
-def get_similarity(user, item):
-    user_vector = user_vectors[user]
-    item_vector = TF_IDF[item]
-
-    sim = np.dot(user_vector, item_vector)/ ( np.linalg.norm(user_vector)*np.linalg.norm(item_vector) )
-    
     # umin + (umax-umin)*sim
-    delta = user_range[0][user] + (user_range[1][user]-user_range[0][user])*sim 
-    return min(10, max(user_mean[user] + delta,0))
+    delta = range_usuario[0][user] + (range_usuario[1][user]-range_usuario[0][user])*sim 
+    return min(10, max(media_usuarios[user] + delta,0))
 
 
-item_mean  = np.nanmean(utility, axis=0)
-item_std   = np.nanstd(utility, axis=0)
-item_count = np.sum(np.isnan(utility), axis=0)
+media_item  = np.nanmean(matriz, axis=0)
+std_item   = np.nanstd(matriz, axis=0)
+soma_item = np.sum(np.isnan(matriz), axis=0)
 
-global_mean = np.nanmean(utility)
+media_global = np.nanmean(matriz)
 
 ## AAAAAAAAAAAAAAAAH
 
-teste = pd.read_csv(test_filename) 
+teste = pd.read_csv(arquivo_teste) 
 
-rated_items = np.unique([ui for ui in train_ratings['ItemId']]) 
-rated_items = {v: k  for k, v in enumerate(sorted(rated_items))} 
+items_rated = np.unique([ui for ui in ratings_treino['ItemId']]) 
+items_rated = {v: k  for k, v in enumerate(sorted(items_rated))} 
 
 
-all_pred = []
-kind = []
+predicoes = []
+tipo = []
 for i in range(len(teste)):
-    user = teste.iloc[i]['UserId']
+    usuario = teste.iloc[i]['UserId']
     item = teste.iloc[i]['ItemId']
-    user = users.get(user)  
-    rated_item = rated_items.get(item) 
-    item = items.get(item)
+    usuario = usuarios.get(usuario)  
+    item_rated = items_rated.get(item) 
+    item = itens.get(item)
     
-    if user is None and rated_item is None :
-        kind.append('cold')
-        pred = global_mean
+    if usuario is None and item_rated is None :
+        tipo.append('cold')
+        pred = media_global
         
-    elif user is None:
-        kind.append('cold')
-        pred = item_mean[item] - 1.65 * (item_std[item]/item_count[item])
+    elif usuario is None:
+        tipo.append('cold')
+        pred = media_item[item] - 1.65 * (std_item[item]/soma_item[item])
                     
     else:
-        kind.append('sim')
-        pred = get_similarity(user, item)
+        tipo.append('sim')
+        pred = similaridade(usuario, item)
     
-    all_pred.append(global_mean if np.isnan(pred) else pred)
+    predicoes.append(media_global if np.isnan(pred) else pred)
 
-teste['Rating'] = all_pred
+teste['Rating'] = predicoes
 teste = teste.groupby('UserId', as_index=False).apply(lambda x: x.sort_values('Rating', ascending=False))
 teste = teste.drop('Rating', axis=1)
-
-# In[12]:
-
 
 with pd.option_context('display.max_rows', None, 
                        'display.max_columns', None): 

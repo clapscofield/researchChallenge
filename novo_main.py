@@ -2,21 +2,19 @@ import pandas as pd
 import numpy as np
 import argparse
 
-from main import TF_IDF
-
 DICT, TEXT = 0, 1
 
 class Recomendador():
     def __init__(self, treino, conteudo, teste):
 
-        self.conteudo = conteudo
+        self.conteudo_arquivo = conteudo
         self.teste = teste
         self.treino = treino
         self.treino, self.usuarios = self.drop(treino, 0, 'users',20) 
-        conteudo = {}
+        self.conteudo = {}
         self.itens = {}
 
-    def drop(ratings, idx, coluna, arvores):
+    def drop(self, ratings, idx, coluna, arvores):
         valores = ratings.iloc[:, idx]
         ratings[coluna] = valores
 
@@ -100,7 +98,7 @@ class Recomendador():
             vetor_usuarios.append(user_vector)
         return vetor_usuarios
 
-    def similaridade(self, user, item, vetor_usuarios, range_usuario, media_usuarios):
+    def similaridade(self, TF_IDF, user, item, vetor_usuarios, range_usuario, media_usuarios):
         vetor_usuario = vetor_usuarios[user]
         vetor_item = TF_IDF[item]
 
@@ -149,7 +147,7 @@ class Recomendador():
                             
             else:
                 tipo.append('sim')
-                pred = self.similaridade(usuario, item, vetor_usuarios, range_usuario, media_usuarios)
+                pred = self.similaridade(TF_IDF, usuario, item, vetor_usuarios, range_usuario, media_usuarios)
             
             predicoes.append(media_global if np.isnan(pred) else pred)
 
@@ -172,7 +170,7 @@ if __name__ == '__main__':
     treino = pd.read_json(arquivo_treino, lines=True) 
     conteudo_arquivo = pd.read_json(arquivo_conteudo, lines=True) 
 
-    recomendador = Recomendador(arquivo_treino, arquivo_conteudo, arquivo_teste)
+    recomendador = Recomendador(treino, conteudo_arquivo, arquivo_teste)
     recomendador.predicao()
 
 

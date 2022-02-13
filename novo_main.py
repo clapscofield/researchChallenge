@@ -143,7 +143,7 @@ class Recomendador():
                 
             elif usuario is None:
                 tipo.append('cold')
-                pred = media_item[item] - 1.65 * (std_item[item]/soma_item[item])
+                pred = media_item[item] - 10 * (std_item[item]/soma_item[item])
                             
             else:
                 tipo.append('sim')
